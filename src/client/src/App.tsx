@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { PromptPanel } from './components/PromptPanel';
-import { ChatPanel } from './components/ChatPanel';
+import React, { useState } from 'react';
 import { DigitalHuman } from './types/index';
 import { socketService } from './services/socketService';
-import { AlertCircle, CheckCircle, Wifi, WifiOff } from 'lucide-react';
+import { LoginPage } from './pages/LoginPage';
+import { MainDashboard } from './pages/MainDashboard';
+import { ChatInterface } from './pages/ChatInterface';
+import { PromptPanel } from './components/PromptPanel';
+import { AlertCircle, CheckCircle } from 'lucide-react';
 
 interface Notification {
   id: string;
@@ -11,10 +13,23 @@ interface Notification {
   message: string;
 }
 
+interface User {
+  id: string;
+  username: string;
+  email: string;
+  displayName: string;
+  sessionId: string;
+}
+
+type AppView = 'login' | 'dashboard' | 'chat' | 'create';
+
 function App() {
-  const [digitalHuman, setDigitalHuman] = useState<DigitalHuman | null>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [currentView, setCurrentView] = useState<AppView>('login');
+  const [selectedDigitalHuman, setSelectedDigitalHuman] = useState<DigitalHuman | null>(null);
+  const [savedDigitalHumans, setSavedDigitalHumans] = useState<DigitalHuman[]>([]);
   const [isConnected, setIsConnected] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
   const addNotification = (type: Notification['type'], message: string) => {
@@ -33,47 +48,195 @@ function App() {
     setNotifications(prev => prev.filter(n => n.id !== id));
   };
 
-  useEffect(() => {
-    // Connect to socket server
-    const connectToServer = async () => {
-      try {
-        await socketService.connect();
-        setIsConnected(true);
-        addNotification('success', 'Connected to server');
-      } catch (error) {
-        console.error('Failed to connect to server:', error);
-        setIsConnected(false);
-        addNotification('error', 'Failed to connect to server');
-      }
-    };
-
-    connectToServer();
-
-    // Set up event listeners only once
+  // Set up socket event listeners after connection is established
+  const setupSocketListeners = () => {
+    console.log('🔌 Setting up socket event listeners after connection');
+    
+    // Set up socket event listeners
     socketService.onPromptGenerated((newDigitalHuman) => {
       console.log('🎉 Digital human generated:', newDigitalHuman.name);
-      setDigitalHuman(newDigitalHuman);
-      setIsGenerating(false);
+      setSelectedDigitalHuman(newDigitalHuman);
       addNotification('success', `Digital human "${newDigitalHuman.name}" created successfully!`);
+      
+      // Add to saved list if not already there
+      setSavedDigitalHumans(prev => {
+        const exists = prev.find(dh => dh.id === newDigitalHuman.id);
+        if (!exists) {
+          return [newDigitalHuman, ...prev];
+        }
+        return prev.map(dh => dh.id === newDigitalHuman.id ? newDigitalHuman : dh);
+      });
+      
+      // Go to chat view after creation
+      setCurrentView('chat');
     });
 
     socketService.onDigitalHumanUpdated((updatedDigitalHuman) => {
       console.log('📝 Digital human updated:', updatedDigitalHuman.name);
-      setDigitalHuman(updatedDigitalHuman);
+      setSelectedDigitalHuman(updatedDigitalHuman);
       addNotification('success', 'Digital human updated successfully!');
+      
+      // Update in saved list
+      setSavedDigitalHumans(prev => 
+        prev.map(dh => dh.id === updatedDigitalHuman.id ? updatedDigitalHuman : dh)
+      );
+    });
+
+    socketService.onUserDigitalHumans((digitalHumans) => {
+      console.log('📚 Loaded user digital humans:', digitalHumans.length);
+      setSavedDigitalHumans(digitalHumans);
+    });
+
+    socketService.onDigitalHumanDeleted((digitalHumanId) => {
+      console.log('🗑️ Digital human deleted:', digitalHumanId);
+      setSavedDigitalHumans(prev => prev.filter(dh => dh.id !== digitalHumanId));
+      if (selectedDigitalHuman?.id === digitalHumanId) {
+        setSelectedDigitalHuman(null);
+        setCurrentView('dashboard');
+      }
+      addNotification('success', 'Digital human deleted successfully!');
     });
 
     socketService.onError((error) => {
       console.error('🚨 App received socket error:', error);
-      setIsGenerating(false);
       addNotification('error', error.message);
     });
 
-    // Don't disconnect on unmount during development to avoid reconnection issues
-    // return () => {
-    //   socketService.disconnect();
-    // };
-  }, []);
+    // Request user's digital humans after setting up listeners
+    console.log('📚 Requesting user digital humans...');
+    socketService.loadDigitalHumans();
+  };
+
+  // Authentication handlers
+  const handleLogin = async (username: string, email: string, displayName: string) => {
+    try {
+      await socketService.connect();
+      setIsConnected(true);
+      
+      // Authenticate with the server
+      const authenticatedUser = await socketService.authenticate({ username });
+      
+      // Set up socket event listeners after authentication
+      setupSocketListeners();
+      
+      // Create user object from server response
+      const newUser: User = {
+        id: authenticatedUser.id,
+        username: authenticatedUser.username,
+        email: email,
+        displayName: displayName,
+        sessionId: `session_${Date.now()}`
+      };
+      
+      setUser(newUser);
+      setCurrentView('dashboard');
+      addNotification('success', `Welcome, ${displayName}!`);
+    } catch (error) {
+      console.error('Login failed:', error);
+      addNotification('error', 'Failed to authenticate with server');
+      setIsConnected(false);
+    }
+  };
+
+  const handleGuestLogin = async () => {
+    try {
+      await socketService.connect();
+      setIsConnected(true);
+      
+      // Authenticate as guest (server will create a guest user)
+      const guestUser = await socketService.authenticate({ username: 'guest' });
+      
+      // Set up socket event listeners after authentication
+      setupSocketListeners();
+
+      const newUser: User = {
+        id: guestUser.id,
+        username: guestUser.username,
+        email: 'guest@local',
+        displayName: 'Guest User',
+        sessionId: `guest_session_${Date.now()}`
+      };
+      
+      setUser(newUser);
+      setCurrentView('dashboard');
+      addNotification('info', 'Welcome, Guest! Data won\'t be saved permanently.');
+    } catch (error) {
+      console.error('Guest login failed:', error);
+      addNotification('error', 'Failed to authenticate with server');
+      setIsConnected(false);
+    }
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    setCurrentView('login');
+    setSelectedDigitalHuman(null);
+    setSavedDigitalHumans([]);
+    socketService.disconnect();
+    setIsConnected(false);
+    addNotification('info', 'Logged out successfully');
+  };
+
+  // Digital Human handlers
+  const handleSelectDigitalHuman = (digitalHuman: DigitalHuman) => {
+    setSelectedDigitalHuman(digitalHuman);
+    setCurrentView('chat');
+  };
+
+  const handleCreateNew = () => {
+    setSelectedDigitalHuman(null);
+    setCurrentView('create');
+  };
+
+  const handleBackToDashboard = () => {
+    setCurrentView('dashboard');
+    // Refresh digital humans data when returning to dashboard
+    if (user) {
+      socketService.loadDigitalHumans();
+    }
+  };
+
+  const handleDigitalHumanUpdate = (digitalHuman: DigitalHuman) => {
+    setSelectedDigitalHuman(digitalHuman);
+    setSavedDigitalHumans(prev => 
+      prev.map(dh => dh.id === digitalHuman.id ? digitalHuman : dh)
+    );
+  };
+
+  const handleSaveDigitalHuman = (digitalHuman: DigitalHuman) => {
+    // Save to database via socket
+    socketService.updateDigitalHuman(digitalHuman);
+    
+    // Add to local state if not already there
+    setSavedDigitalHumans(prev => {
+      const exists = prev.find(dh => dh.id === digitalHuman.id);
+      if (!exists) {
+        return [digitalHuman, ...prev];
+      }
+      return prev;
+    });
+    
+    addNotification('success', `"${digitalHuman.name}" saved to your dashboard!`);
+  };
+
+  const handleDigitalHumanSelect = (selectedHuman: DigitalHuman) => {
+    setSelectedDigitalHuman(selectedHuman);
+    addNotification('info', `Switched to "${selectedHuman.name}"`);
+  };
+
+  const handleDigitalHumanDelete = (digitalHumanId: string) => {
+    if (window.confirm('Are you sure you want to delete this digital human? This action cannot be undone.')) {
+      socketService.deleteDigitalHuman(digitalHumanId);
+    }
+  };
+
+  const handleDigitalHumanChange = (updatedHuman: DigitalHuman) => {
+    setSelectedDigitalHuman(updatedHuman);
+    // Update the saved list if it exists there too
+    setSavedDigitalHumans(prev => 
+      prev.map(human => human.id === updatedHuman.id ? updatedHuman : human)
+    );
+  };
 
   const getNotificationIcon = (type: Notification['type']) => {
     switch (type) {
@@ -97,65 +260,75 @@ function App() {
     }
   };
 
-  return (
-    <div className="h-screen flex flex-col bg-gray-100">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200 p-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-800">
-            Digital Human Creation Studio
-          </h1>
-          <div className="flex items-center gap-4">
-            <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm ${
-              isConnected 
-                ? 'bg-green-100 text-green-800' 
-                : 'bg-red-100 text-red-800'
-            }`}>
-              {isConnected ? (
-                <>
-                  <Wifi className="h-4 w-4" />
-                  Connected
-                </>
-              ) : (
-                <>
-                  <WifiOff className="h-4 w-4" />
-                  Disconnected
-                </>
-              )}
-            </div>
-            {digitalHuman && (
-              <div className="text-sm text-gray-600">
-                Current: <span className="font-medium">{digitalHuman.name}</span>
-              </div>
-            )}
-            <button
-              onClick={() => socketService.testConnection()}
-              className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600"
-            >
-              Test Socket
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left Panel - Prompt Configuration */}
-        <div className="w-1/3 border-r border-gray-200 overflow-hidden">
-          <PromptPanel
-            digitalHuman={digitalHuman}
-            onDigitalHumanChange={setDigitalHuman}
-            isGenerating={isGenerating}
-            onGenerating={setIsGenerating}
+  const renderCurrentView = () => {
+    switch (currentView) {
+      case 'login':
+        return (
+          <LoginPage
+            onLogin={handleLogin}
+            onGuestLogin={handleGuestLogin}
           />
-        </div>
+        );
+      
+      case 'dashboard':
+        return user ? (
+          <MainDashboard
+            user={user}
+            onLogout={handleLogout}
+            onSelectDigitalHuman={handleSelectDigitalHuman}
+            onCreateNew={handleCreateNew}
+          />
+        ) : null;
+      
+      case 'chat':
+        return user && selectedDigitalHuman ? (
+          <ChatInterface
+            digitalHuman={selectedDigitalHuman}
+            user={user}
+            onBack={handleBackToDashboard}
+            onDigitalHumanUpdate={handleDigitalHumanUpdate}
+            savedDigitalHumans={savedDigitalHumans}
+            onSave={handleSaveDigitalHuman}
+          />
+        ) : null;
+      
+      case 'create':
+        return user ? (
+          <div className="h-screen flex">
+            <div className="w-1/2 border-r border-gray-200">
+              <PromptPanel
+                digitalHuman={selectedDigitalHuman}
+                savedDigitalHumans={savedDigitalHumans}
+                onDigitalHumanChange={handleDigitalHumanChange}
+                onDigitalHumanSelect={handleDigitalHumanSelect}
+                onDigitalHumanDelete={handleDigitalHumanDelete}
+                isGenerating={isGenerating}
+                onGenerating={setIsGenerating}
+              />
+            </div>
+            <div className="w-1/2 bg-gray-50 flex items-center justify-center">
+              <div className="text-center">
+                <p className="text-gray-500 mb-4">Preview will appear here</p>
+                <button
+                  onClick={handleBackToDashboard}
+                  className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+                >
+                  Back to Dashboard
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null;
+      
+      default:
+        return null;
+    }
+  };
 
-        {/* Right Panel - Chat Interface */}
-        <div className="flex-1 overflow-hidden">
-          <ChatPanel digitalHuman={digitalHuman} />
-        </div>
-      </div>
-
+  return (
+    <div className="min-h-screen">
+      {renderCurrentView()}
+      
       {/* Notifications */}
       <div className="fixed top-4 right-4 z-50 space-y-2">
         {notifications.map((notification) => (

@@ -3,7 +3,7 @@ import { SocketEvents, DigitalHuman, ChatMessage, GeneratePromptRequest, ChatReq
 
 class SocketService {
   private socket: Socket<SocketEvents> | null = null;
-  private readonly serverUrl = 'http://localhost:3001';
+  private readonly serverUrl = 'http://localhost:3004';
   private messageCallbacks: ((message: ChatMessage) => void)[] = [];
   private errorCallbacks: ((error: { message: string; code?: string }) => void)[] = [];
 
@@ -56,7 +56,10 @@ class SocketService {
     // Clear existing listeners to avoid duplicates
     this.socket.off('message-received');
     this.socket.off('error');
-    this.socket.off('pong');
+    this.socket.off('user-digital-humans');
+    this.socket.off('chat-history');
+    this.socket.off('digital-human-deleted');
+    this.socket.off('chat-history-cleared');
 
     // Set up message listeners
     this.socket.on('message-received', (message: ChatMessage) => {
@@ -68,10 +71,6 @@ class SocketService {
       console.error('🚨 SOCKET: Error received:', error);
       this.errorCallbacks.forEach(callback => callback(error));
     });
-
-    this.socket.on('pong', (data) => {
-      console.log('🏓 SOCKET: Received pong from server:', data);
-    });
   }
 
   disconnect(): void {
@@ -81,10 +80,37 @@ class SocketService {
     }
   }
 
+  // Authentication
+  authenticate(userData: { username?: string; userId?: string }): Promise<any> {
+    return new Promise((resolve, reject) => {
+      if (this.socket) {
+        this.socket.emit('authenticate', userData);
+        
+        // Listen for authentication response
+        this.socket.off('authenticated');
+        this.socket.on('authenticated', (response: { success: boolean; user?: any; error?: string }) => {
+          if (response.success) {
+            console.log('✅ Authentication successful:', response.user);
+            resolve(response.user);
+          } else {
+            console.error('❌ Authentication failed:', response.error);
+            reject(new Error(response.error));
+          }
+        });
+      } else {
+        reject(new Error('Socket not connected'));
+      }
+    });
+  }
+
   // Digital Human Operations
   generatePrompt(request: GeneratePromptRequest): void {
-    if (this.socket) {
+    console.log('🚀 Attempting to generate prompt, socket connected:', !!this.socket?.connected);
+    if (this.socket && this.socket.connected) {
+      console.log('✅ Emitting generate-prompt event');
       this.socket.emit('generate-prompt', request);
+    } else {
+      console.error('❌ Socket not connected, cannot generate prompt');
     }
   }
 
@@ -113,12 +139,20 @@ class SocketService {
   // Event Listeners
   onPromptGenerated(callback: (digitalHuman: DigitalHuman) => void): void {
     if (this.socket) {
-      this.socket.on('prompt-generated', callback);
+      console.log('🎯 Setting up prompt-generated event listener');
+      // Remove existing listeners first to avoid duplicates
+      this.socket.off('prompt-generated');
+      this.socket.on('prompt-generated', (digitalHuman) => {
+        console.log('🎉 Received prompt-generated event:', digitalHuman);
+        callback(digitalHuman);
+      });
     }
   }
 
   onDigitalHumanUpdated(callback: (digitalHuman: DigitalHuman) => void): void {
     if (this.socket) {
+      // Remove existing listeners first to avoid duplicates  
+      this.socket.off('digital-human-updated');
       this.socket.on('digital-human-updated', callback);
     }
   }
@@ -156,17 +190,73 @@ class SocketService {
     return this.socket?.connected || false;
   }
 
-  // Test connection
-  testConnection(): void {
+  // Database Operations
+  loadDigitalHumans(): void {
     if (this.socket) {
-      console.log('🏓 Sending ping to server...');
-      this.socket.emit('ping', { test: 'Hello from client!' });
-      
-      this.socket.once('pong', (data) => {
-        console.log('🏓 Received pong from server:', data);
-      });
+      this.socket.emit('load-digital-humans');
     }
   }
+
+  loadChatHistory(digitalHumanId: string): void {
+    if (this.socket) {
+      this.socket.emit('load-chat-history', digitalHumanId);
+    }
+  }
+
+  deleteDigitalHuman(digitalHumanId: string): void {
+    if (this.socket) {
+      this.socket.emit('delete-digital-human', digitalHumanId);
+    }
+  }
+
+  clearChatHistory(digitalHumanId: string): void {
+    if (this.socket) {
+      this.socket.emit('clear-chat-history', digitalHumanId);
+    }
+  }
+
+  // Database Event Listeners
+  onUserDigitalHumans(callback: (digitalHumans: DigitalHuman[]) => void): void {
+    if (this.socket) {
+      this.socket.off('user-digital-humans');
+      this.socket.on('user-digital-humans', callback);
+    }
+  }
+
+  onChatHistory(callback: (messages: ChatMessage[]) => void): void {
+    if (this.socket) {
+      this.socket.off('chat-history');
+      this.socket.on('chat-history', callback);
+    }
+  }
+
+  onDigitalHumanDeleted(callback: (digitalHumanId: string) => void): void {
+    if (this.socket) {
+      this.socket.off('digital-human-deleted');
+      this.socket.on('digital-human-deleted', callback);
+    }
+  }
+
+  onChatHistoryCleared(callback: (digitalHumanId: string) => void): void {
+    if (this.socket) {
+      this.socket.on('chat-history-cleared', callback);
+    }
+  }
+
+  // Public Digital Humans
+  getPublicDigitalHumans(params = {}): void {
+    if (this.socket) {
+      this.socket.emit('get-public-digital-humans', params);
+    }
+  }
+
+  onPublicDigitalHumans(callback: (digitalHumans: any[]) => void): void {
+    if (this.socket) {
+      this.socket.off('public-digital-humans');
+      this.socket.on('public-digital-humans', callback);
+    }
+  }
+
 }
 
 export const socketService = new SocketService();

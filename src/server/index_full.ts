@@ -121,16 +121,16 @@ io.on('connection', (socket) => {
     try {
       const { userId } = socket.data as any;
       if (!userId) {
-        socket.emit('error', { message: 'User not authenticated', code: 'UNAUTHORIZED' });
+        socket.emit('digital-humans-loaded', { success: false, error: 'User not authenticated' });
         return;
       }
 
       const digitalHumans = await DigitalHumanService.getAllDigitalHumans(userId);
-      socket.emit('user-digital-humans', digitalHumans);
+      socket.emit('digital-humans-loaded', { success: true, digitalHumans });
       console.log('Loaded digital humans for user:', userId);
     } catch (error) {
       console.error('Load digital humans error:', error);
-      socket.emit('error', { message: 'Failed to load digital humans', code: 'LOAD_ERROR' });
+      socket.emit('digital-humans-loaded', { success: false, error: 'Failed to load digital humans' });
     }
   });
 
@@ -138,11 +138,11 @@ io.on('connection', (socket) => {
   socket.on('get-public-digital-humans', async (params: { limit?: number; offset?: number } = {}) => {
     try {
       const digitalHumans = await DigitalHumanService.getAllDigitalHumans();
-      socket.emit('public-digital-humans', digitalHumans);
+      socket.emit('public-digital-humans', { success: true, digitalHumans });
       console.log('Loaded public digital humans');
     } catch (error) {
       console.error('Get public digital humans error:', error);
-      socket.emit('error', { message: 'Failed to get public digital humans', code: 'LOAD_ERROR' });
+      socket.emit('public-digital-humans', { success: false, error: 'Failed to get public digital humans' });
     }
   });
 

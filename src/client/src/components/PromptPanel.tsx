@@ -14,14 +14,20 @@ import { socketService } from '../services/socketService';
 
 interface PromptPanelProps {
   digitalHuman: DigitalHuman | null;
+  savedDigitalHumans: DigitalHuman[];
   onDigitalHumanChange: (digitalHuman: DigitalHuman) => void;
+  onDigitalHumanSelect: (digitalHuman: DigitalHuman) => void;
+  onDigitalHumanDelete: (digitalHumanId: string) => void;
   isGenerating: boolean;
   onGenerating: (generating: boolean) => void;
 }
 
 export const PromptPanel: React.FC<PromptPanelProps> = ({
   digitalHuman,
+  savedDigitalHumans,
   onDigitalHumanChange,
+  onDigitalHumanSelect,
+  onDigitalHumanDelete,
   isGenerating,
   onGenerating
 }) => {
@@ -29,6 +35,7 @@ export const PromptPanel: React.FC<PromptPanelProps> = ({
   const [personality, setPersonality] = useState('');
   const [domain, setDomain] = useState('');
   const [specialInstructions, setSpecialInstructions] = useState('');
+  const [isPublic, setIsPublic] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   
   // Local state for editing
@@ -54,7 +61,8 @@ export const PromptPanel: React.FC<PromptPanelProps> = ({
       description: description.trim(),
       personality: personality.trim() || undefined,
       domain: domain.trim() || undefined,
-      specialInstructions: specialInstructions.trim() || undefined
+      specialInstructions: specialInstructions.trim() || undefined,
+      isPublic: isPublic
     };
 
     socketService.generatePrompt(request);
@@ -121,11 +129,55 @@ export const PromptPanel: React.FC<PromptPanelProps> = ({
       <div className="p-4 border-b border-gray-200">
         <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
           <Brain className="h-6 w-6 text-purple-600" />
-          Digital Human Creation
+          Digital Human Studio
         </h2>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
+        {/* Saved Digital Humans */}
+        {savedDigitalHumans.length > 0 && (
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-gray-700 flex items-center gap-2">
+              <User className="h-5 w-5" />
+              Your Digital Humans ({savedDigitalHumans.length})
+            </h3>
+            
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {savedDigitalHumans.map((savedHuman) => (
+                <div
+                  key={savedHuman.id}
+                  className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                    digitalHuman?.id === savedHuman.id
+                      ? 'border-purple-500 bg-purple-50'
+                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                  }`}
+                  onClick={() => onDigitalHumanSelect(savedHuman)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <h4 className="font-medium text-gray-800">{savedHuman.name}</h4>
+                      <p className="text-sm text-gray-600 truncate">{savedHuman.personality}</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Created: {new Date(savedHuman.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDigitalHumanDelete(savedHuman.id);
+                      }}
+                      className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                      title="Delete digital human"
+                    >
+                      ×
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Generation Form */}
         <div className="space-y-4">
           <h3 className="text-lg font-semibold text-gray-700 flex items-center gap-2">
@@ -185,6 +237,43 @@ export const PromptPanel: React.FC<PromptPanelProps> = ({
               className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
               rows={2}
             />
+          </div>
+
+          {/* Public/Private Toggle */}
+          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <div className={`w-5 h-5 rounded ${isPublic ? 'bg-green-500' : 'bg-gray-400'} flex items-center justify-center`}>
+                  {isPublic ? (
+                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                    </svg>
+                  ) : (
+                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                    </svg>
+                  )}
+                </div>
+                <span className="text-sm font-medium text-gray-700">
+                  {isPublic ? 'Public' : 'Private'}
+                </span>
+              </div>
+              <span className="text-xs text-gray-500">
+                {isPublic ? 'Others can discover and use this digital human' : 'Only you can access this digital human'}
+              </span>
+            </div>
+            <button
+              onClick={() => setIsPublic(!isPublic)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                isPublic ? 'bg-purple-600' : 'bg-gray-300'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  isPublic ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
           </div>
 
           <div className="flex gap-3">

@@ -1,89 +1,41 @@
-import { ChatMessage, DigitalHuman, ChatRequest } from '../types/index.js';
-import { DigitalHumanService } from './DigitalHumanService.js';
+import { DigitalHuman } from '../types/interfaces.js';
 
-export class ChatService {
-  private digitalHumanService: DigitalHumanService;
-  private chatHistory: Map<string, ChatMessage[]> = new Map();
+interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+}
 
-  constructor() {
-    this.digitalHumanService = new DigitalHumanService();
+class ChatService {
+  async generateResponse(
+    digitalHuman: DigitalHuman,
+    message: string,
+    conversationHistory: ChatMessage[] = []
+  ): Promise<string> {
+    // For now, return a simple demo response
+    // In production, this would integrate with AI APIs
+    
+    const responses = [
+      `As ${digitalHuman.name}, I find that interesting! Tell me more about your thoughts on this.`,
+      `That's a fascinating perspective! Based on my background in ${digitalHuman.background || 'various fields'}, I think we could explore this further.`,
+      `I appreciate you sharing that with me. Let me think about this from the perspective of ${digitalHuman.personality || 'someone who cares about understanding'}.`,
+      `Thank you for bringing this up! Given my experience, I'd love to discuss how we might approach this differently.`,
+      `That resonates with me deeply. As someone with my background, I find there are often multiple ways to look at these situations.`
+    ];
+    
+    return responses[Math.floor(Math.random() * responses.length)];
   }
 
-  getChatHistory(digitalHumanId: string): ChatMessage[] {
-    return this.chatHistory.get(digitalHumanId) || [];
+  formatConversationHistory(messages: ChatMessage[]): string {
+    return messages
+      .slice(-10) // Keep last 10 messages for context
+      .map(msg => `${msg.role}: ${msg.content}`)
+      .join('\n');
   }
 
-  addMessage(message: ChatMessage): void {
-    const history = this.getChatHistory(message.digitalHumanId);
-    history.push(message);
-    this.chatHistory.set(message.digitalHumanId, history);
-
-    // Keep only last 50 messages per digital human
-    if (history.length > 50) {
-      this.chatHistory.set(message.digitalHumanId, history.slice(-50));
-    }
-  }
-
-  async processMessage(request: ChatRequest, digitalHuman: DigitalHuman): Promise<ChatMessage> {
-    // Add user message to history
-    const userMessage: ChatMessage = {
-      id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      role: 'user',
-      content: request.message,
-      timestamp: new Date(),
-      digitalHumanId: request.digitalHumanId
-    };
-
-    this.addMessage(userMessage);
-
-    try {
-      // Get chat history for context
-      const history = this.getChatHistory(request.digitalHumanId);
-      const contextMessages = history.slice(-10).map(msg => ({
-        role: msg.role,
-        content: msg.content
-      }));
-
-      // Generate response using the digital human
-      const responseContent = await this.digitalHumanService.generateResponse(
-        request.message,
-        digitalHuman,
-        contextMessages
-      );
-
-      // Create assistant message
-      const assistantMessage: ChatMessage = {
-        id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        role: 'assistant',
-        content: responseContent,
-        timestamp: new Date(),
-        digitalHumanId: request.digitalHumanId
-      };
-
-      this.addMessage(assistantMessage);
-      return assistantMessage;
-    } catch (error) {
-      console.error('Error processing message:', error);
-      
-      // Create error response
-      const errorMessage: ChatMessage = {
-        id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        role: 'assistant',
-        content: 'Sorry, I encountered an error while processing your message. Please try again.',
-        timestamp: new Date(),
-        digitalHumanId: request.digitalHumanId
-      };
-
-      this.addMessage(errorMessage);
-      return errorMessage;
-    }
-  }
-
-  clearChatHistory(digitalHumanId: string): void {
-    this.chatHistory.delete(digitalHumanId);
-  }
-
-  getAllChatSessions(): string[] {
-    return Array.from(this.chatHistory.keys());
+  validateMessage(message: string): boolean {
+    return message.trim().length > 0 && message.length <= 1000;
   }
 }
+
+export default new ChatService();

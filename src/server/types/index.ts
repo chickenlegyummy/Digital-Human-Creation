@@ -6,6 +6,7 @@ export interface DigitalHuman {
   personality: string;
   temperature: number;
   maxTokens: number;
+  isPublic: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -23,6 +24,7 @@ export interface GeneratePromptRequest {
   personality?: string;
   domain?: string;
   specialInstructions?: string;
+  isPublic?: boolean;
 }
 
 export interface ChatRequest {
@@ -37,14 +39,24 @@ export interface SocketEvents {
   'update-digital-human': (digitalHuman: DigitalHuman) => void;
   'send-message': (request: ChatRequest) => void;
   'join-chat': (digitalHumanId: string) => void;
-  'ping': (data: any) => void;
+  'load-digital-humans': () => void;
+  'load-chat-history': (digitalHumanId: string) => void;
+  'delete-digital-human': (digitalHumanId: string) => void;
+  'clear-chat-history': (digitalHumanId: string) => void;
+  'authenticate': (userData: { username: string; email: string; displayName: string }) => void;
+  'get-public-digital-humans': (params?: { limit?: number; offset?: number }) => void;
   
   // Server to Client
   'prompt-generated': (digitalHuman: DigitalHuman) => void;
   'digital-human-updated': (digitalHuman: DigitalHuman) => void;
   'message-received': (message: ChatMessage) => void;
+  'user-digital-humans': (digitalHumans: DigitalHuman[]) => void;
+  'chat-history': (messages: ChatMessage[]) => void;
+  'digital-human-deleted': (digitalHumanId: string) => void;
+  'chat-history-cleared': (digitalHumanId: string) => void;
+  'auth-success': (user: any) => void;
+  'public-digital-humans': (digitalHumans: any[]) => void;
   'error': (error: { message: string; code?: string }) => void;
-  'pong': (data: { message: string; timestamp: Date }) => void;
 }
 
 export interface DeepSeekResponse {
