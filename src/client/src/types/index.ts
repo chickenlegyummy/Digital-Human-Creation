@@ -31,6 +31,38 @@ export interface ChatRequest {
   chatHistory: ChatMessage[];
 }
 
+// Authentication interfaces
+export interface User {
+  id: number;
+  username: string;
+  email: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AuthRequest {
+  username?: string;
+  email: string;
+  password: string;
+}
+
+export interface AuthResponse {
+  success: boolean;
+  token?: string;
+  user?: User;
+  message?: string;
+}
+
+export interface DashboardData {
+  user: User;
+  digitalHumans: {
+    userBots: DigitalHuman[];
+    publicBots: DigitalHuman[];
+    recentBots: DigitalHuman[];
+  };
+  chatSessions: any[];
+}
+
 export interface SocketEvents {
   // Client to Server
   'generate-prompt': (request: GeneratePromptRequest) => void;
@@ -38,6 +70,11 @@ export interface SocketEvents {
   'send-message': (request: ChatRequest) => void;
   'join-chat': (digitalHumanId: string) => void;
   'ping': (data: any) => void;
+  'authenticate': (token: string) => void;
+  'get-dashboard-data': () => void;
+  'save-digital-human': (digitalHuman: DigitalHuman) => void;
+  'delete-digital-human': (digitalHumanId: string) => void;
+  'get-user-bots': () => void;
   
   // Server to Client
   'prompt-generated': (digitalHuman: DigitalHuman) => void;
@@ -45,4 +82,9 @@ export interface SocketEvents {
   'message-received': (message: ChatMessage) => void;
   'error': (error: { message: string; code?: string }) => void;
   'pong': (data: { message: string; timestamp: Date }) => void;
+  'authenticated': (user: User) => void;
+  'dashboard-data': (data: DashboardData) => void;
+  'digital-human-saved': (digitalHuman: DigitalHuman) => void;
+  'digital-human-deleted': (digitalHumanId: string) => void;
+  'user-bots': (digitalHumans: DigitalHuman[]) => void;
 }

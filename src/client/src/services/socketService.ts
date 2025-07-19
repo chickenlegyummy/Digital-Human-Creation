@@ -81,6 +81,38 @@ class SocketService {
     }
   }
 
+  // Authentication
+  authenticate(token: string): void {
+    if (this.socket) {
+      this.socket.emit('authenticate', token);
+    }
+  }
+
+  // Dashboard Operations
+  getDashboardData(): void {
+    if (this.socket) {
+      this.socket.emit('get-dashboard-data');
+    }
+  }
+
+  saveDigitalHuman(digitalHuman: DigitalHuman): void {
+    if (this.socket) {
+      this.socket.emit('save-digital-human', digitalHuman);
+    }
+  }
+
+  deleteDigitalHuman(digitalHumanId: string): void {
+    if (this.socket) {
+      this.socket.emit('delete-digital-human', digitalHumanId);
+    }
+  }
+
+  getUserBots(): void {
+    if (this.socket) {
+      this.socket.emit('get-user-bots');
+    }
+  }
+
   // Digital Human Operations
   generatePrompt(request: GeneratePromptRequest): void {
     if (this.socket) {
@@ -120,6 +152,36 @@ class SocketService {
   onDigitalHumanUpdated(callback: (digitalHuman: DigitalHuman) => void): void {
     if (this.socket) {
       this.socket.on('digital-human-updated', callback);
+    }
+  }
+
+  onAuthenticated(callback: (user: any) => void): void {
+    if (this.socket) {
+      this.socket.on('authenticated', callback);
+    }
+  }
+
+  onDashboardData(callback: (data: any) => void): void {
+    if (this.socket) {
+      this.socket.on('dashboard-data', callback);
+    }
+  }
+
+  onDigitalHumanSaved(callback: (digitalHuman: DigitalHuman) => void): void {
+    if (this.socket) {
+      this.socket.on('digital-human-saved', callback);
+    }
+  }
+
+  onDigitalHumanDeleted(callback: (digitalHumanId: string) => void): void {
+    if (this.socket) {
+      this.socket.on('digital-human-deleted', callback);
+    }
+  }
+
+  onUserBots(callback: (digitalHumans: DigitalHuman[]) => void): void {
+    if (this.socket) {
+      this.socket.on('user-bots', callback);
     }
   }
 
