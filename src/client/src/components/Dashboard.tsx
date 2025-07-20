@@ -351,6 +351,26 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     {Math.round(bot.temperature * 100)}% creative
                   </div>
                 </div>
+                
+                {/* Action Indicator */}
+                <div className="mt-3 pt-3 border-t border-gray-100">
+                  <div className="flex items-center justify-between">
+                    {bot.ownerId === user?.id || activeTab === 'my-bots' ? (
+                      <span className="text-xs text-blue-600 font-medium">
+                        Click to edit
+                      </span>
+                    ) : (
+                      <span className="text-xs text-green-600 font-medium">
+                        Click to chat
+                      </span>
+                    )}
+                    {bot.ownerId !== user?.id && activeTab !== 'my-bots' && (
+                      <span className="text-xs text-gray-400">
+                        By {bot.ownerId ? `User ${bot.ownerId}` : 'Unknown'}
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
             ))}
           </div>

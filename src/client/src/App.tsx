@@ -14,7 +14,7 @@ interface Notification {
 }
 
 function App() {
-  const [view, setView] = useState<'auth' | 'dashboard' | 'creation'>('auth');
+  const [view, setView] = useState<'auth' | 'dashboard' | 'creation' | 'chat'>('auth');
   const [user, setUser] = useState<User | null>(null);
   const [digitalHuman, setDigitalHuman] = useState<DigitalHuman | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -110,7 +110,13 @@ function App() {
         if (error.code === 'AUTH_ERROR') {
           handleLogout();
         }
-        addNotification('error', error.message);
+        
+        // Handle specific error messages
+        if (error.code === 'PERMISSION_DENIED') {
+          addNotification('error', '🔒 Permission Denied: You can only edit your own digital humans');
+        } else {
+          addNotification('error', error.message);
+        }
       });
     } catch (error) {
       console.error('Failed to connect to server:', error);
@@ -135,8 +141,18 @@ function App() {
   };
 
   const handleSelectDigitalHuman = (selectedDigitalHuman: DigitalHuman) => {
-    setDigitalHuman(selectedDigitalHuman);
-    setView('creation');
+    // Check if the user owns this digital human
+    const isOwner = !selectedDigitalHuman.ownerId || selectedDigitalHuman.ownerId === user?.id;
+    
+    if (isOwner) {
+      // User owns this digital human, allow editing
+      setDigitalHuman(selectedDigitalHuman);
+      setView('creation');
+    } else {
+      // User doesn't own this digital human, only allow chatting
+      setDigitalHuman(selectedDigitalHuman);
+      setView('chat');
+    }
   };
 
   const handleCreateNew = () => {
@@ -255,6 +271,41 @@ function App() {
             <div className="flex-1 overflow-hidden">
               <ChatPanel digitalHuman={digitalHuman} />
             </div>
+          </div>
+        </div>
+      )}
+
+      {view === 'chat' && digitalHuman && (
+        <div className="h-screen flex flex-col bg-gray-100">
+          {/* Header */}
+          <header className="bg-white shadow-sm border-b border-gray-200 p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setView(user ? 'dashboard' : 'auth')}
+                  className="text-gray-600 hover:text-gray-800"
+                >
+                  ← Back to Dashboard
+                </button>
+                <h1 className="text-2xl font-bold text-gray-800">
+                  Chat with {digitalHuman.name}
+                </h1>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 text-sm">
+                  {isConnected ? (
+                    <><Wifi className="h-4 w-4 text-green-500" /> Connected</>
+                  ) : (
+                    <><WifiOff className="h-4 w-4 text-red-500" /> Disconnected</>
+                  )}
+                </div>
+              </div>
+            </div>
+          </header>
+
+          {/* Chat Interface */}
+          <div className="flex-1 overflow-hidden">
+            <ChatPanel digitalHuman={digitalHuman} />
           </div>
         </div>
       )}

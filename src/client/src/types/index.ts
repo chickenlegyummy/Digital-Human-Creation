@@ -9,6 +9,7 @@ export interface DigitalHuman {
   isPublic: boolean;
   createdAt: Date;
   updatedAt: Date;
+  ownerId?: number; // Add optional owner ID for ownership checks
 }
 
 export interface ChatMessage {

@@ -208,7 +208,8 @@ io.on('connection', (socket) => {
         maxTokens: dh.max_tokens,
         isPublic: dh.is_public,
         createdAt: new Date(dh.created_at),
-        updatedAt: new Date(dh.updated_at)
+        updatedAt: new Date(dh.updated_at),
+        ownerId: dh.user_id // Add ownership info
       }));
 
       const publicBots = publicDigitalHumans.slice(0, 10).map(dh => ({
@@ -221,7 +222,8 @@ io.on('connection', (socket) => {
         maxTokens: dh.max_tokens,
         isPublic: dh.is_public,
         createdAt: new Date(dh.created_at),
-        updatedAt: new Date(dh.updated_at)
+        updatedAt: new Date(dh.updated_at),
+        ownerId: dh.user_id // Add ownership info
       }));
 
       socket.emit('dashboard-data', {
@@ -254,6 +256,19 @@ io.on('connection', (socket) => {
           code: 'AUTH_REQUIRED' 
         });
         return;
+      }
+
+      // Check if this is an existing digital human and verify ownership
+      const existingDH = await dbService.getDigitalHumanById(digitalHuman.id);
+      if (existingDH) {
+        // If digital human exists, check if current user owns it
+        if (existingDH.user_id !== user.id) {
+          socket.emit('error', { 
+            message: 'Permission denied: You can only edit your own digital humans', 
+            code: 'PERMISSION_DENIED' 
+          });
+          return;
+        }
       }
 
       await dbService.saveDigitalHuman(digitalHuman, user.id);
@@ -293,19 +308,43 @@ io.on('connection', (socket) => {
   });
 
   // Handle digital human updates
-  socket.on('update-digital-human', (digitalHuman) => {
+  socket.on('update-digital-human', async (digitalHuman) => {
     try {
+      const user = userSessions.get(socket.id);
+      if (!user) {
+        socket.emit('error', { 
+          message: 'User not authenticated', 
+          code: 'AUTH_REQUIRED' 
+        });
+        return;
+      }
+
+      // Check ownership before updating
+      const existingDH = await dbService.getDigitalHumanById(digitalHuman.id);
+      if (!existingDH) {
+        socket.emit('error', { 
+          message: 'Digital human not found', 
+          code: 'NOT_FOUND' 
+        });
+        return;
+      }
+
+      if (existingDH.user_id !== user.id) {
+        socket.emit('error', { 
+          message: 'Permission denied: You can only edit your own digital humans', 
+          code: 'PERMISSION_DENIED' 
+        });
+        return;
+      }
+
       digitalHuman.updatedAt = new Date();
       activeDigitalHumans.set(digitalHuman.id, digitalHuman);
       
-      // If user is authenticated, save to database
-      const user = userSessions.get(socket.id);
-      if (user) {
-        dbService.saveDigitalHuman(digitalHuman, user.id);
-      }
+      // Save to database
+      await dbService.saveDigitalHuman(digitalHuman, user.id);
       
       socket.emit('digital-human-updated', digitalHuman);
-      console.log(`Digital human updated: ${digitalHuman.name} (${digitalHuman.id})`);
+      console.log(`Digital human updated: ${digitalHuman.name} (${digitalHuman.id}) by user ${user.username}`);
     } catch (error: any) {
       console.error('Error updating digital human:', error);
       socket.emit('error', { 
