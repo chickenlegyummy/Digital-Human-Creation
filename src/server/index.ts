@@ -35,6 +35,38 @@ const chatService = new ChatService();
 const activeDigitalHumans = new Map<string, DigitalHuman>();
 const userSessions = new Map<string, User>(); // socketId -> User
 
+// Function to load all digital humans from database into memory
+async function loadDigitalHumansIntoMemory() {
+  try {
+    console.log('🔄 Loading digital humans from database into memory...');
+    const storedDigitalHumans = await dbService.getAllDigitalHumans();
+    
+    for (const dh of storedDigitalHumans) {
+      const digitalHuman: DigitalHuman = {
+        id: dh.id,
+        name: dh.name,
+        prompt: dh.prompt,
+        rules: JSON.parse(dh.rules),
+        personality: dh.personality,
+        temperature: dh.temperature,
+        maxTokens: dh.max_tokens,
+        isPublic: dh.is_public,
+        createdAt: new Date(dh.created_at),
+        updatedAt: new Date(dh.updated_at)
+      };
+      
+      activeDigitalHumans.set(digitalHuman.id, digitalHuman);
+    }
+    
+    console.log(`✅ Loaded ${storedDigitalHumans.length} digital humans into memory`);
+  } catch (error) {
+    console.error('❌ Error loading digital humans into memory:', error);
+  }
+}
+
+// Load digital humans into memory on startup
+loadDigitalHumansIntoMemory();
+
 // Socket.IO connection handling
 io.on('connection', (socket) => {
   console.log(`Client connected: ${socket.id}`);
@@ -361,9 +393,58 @@ io.on('connection', (socket) => {
         historyLength: request.chatHistory?.length || 0
       });
       
-      const digitalHuman = activeDigitalHumans.get(request.digitalHumanId);
+      const user = userSessions.get(socket.id);
+      if (!user) {
+        console.log('ERROR: User not authenticated for chat');
+        socket.emit('error', { 
+          message: 'User not authenticated', 
+          code: 'AUTH_REQUIRED' 
+        });
+        return;
+      }
+      
+      let digitalHuman = activeDigitalHumans.get(request.digitalHumanId);
       if (!digitalHuman) {
-        console.log('ERROR: Digital human not found:', request.digitalHumanId);
+        // Try to load the digital human from database if not in memory
+        console.log('🔍 Digital human not in memory, checking database...', request.digitalHumanId);
+        try {
+          const storedDH = await dbService.getDigitalHumanById(request.digitalHumanId);
+          if (storedDH) {
+            digitalHuman = {
+              id: storedDH.id,
+              name: storedDH.name,
+              prompt: storedDH.prompt,
+              rules: JSON.parse(storedDH.rules || '[]'),
+              personality: storedDH.personality,
+              temperature: storedDH.temperature,
+              maxTokens: storedDH.max_tokens,
+              isPublic: storedDH.is_public,
+              createdAt: new Date(storedDH.created_at),
+              updatedAt: new Date(storedDH.updated_at)
+            };
+            
+            // Add to memory for future use
+            activeDigitalHumans.set(digitalHuman.id, digitalHuman);
+            console.log(`✅ Loaded digital human from database: ${digitalHuman.name}`);
+          } else {
+            console.log('ERROR: Digital human not found in database:', request.digitalHumanId);
+            socket.emit('error', { 
+              message: 'Digital human not found', 
+              code: 'HUMAN_NOT_FOUND' 
+            });
+            return;
+          }
+        } catch (dbError) {
+          console.error('ERROR: Database error while loading digital human:', dbError);
+          socket.emit('error', { 
+            message: 'Failed to load digital human', 
+            code: 'DATABASE_ERROR' 
+          });
+          return;
+        }
+      }
+
+      if (!digitalHuman) {
         socket.emit('error', { 
           message: 'Digital human not found', 
           code: 'HUMAN_NOT_FOUND' 
@@ -371,8 +452,9 @@ io.on('connection', (socket) => {
         return;
       }
 
-      console.log(`Processing message for ${digitalHuman.name}: ${request.message}`);
-      const response = await chatService.processMessage(request, digitalHuman);
+      // Process the message
+      console.log(`Processing message for ${digitalHuman.name} from user ${user.username}: ${request.message}`);
+      const response = await chatService.processMessage(request, digitalHuman, user.id);
       
       console.log('Generated response:', {
         id: response.id,
@@ -396,24 +478,28 @@ io.on('connection', (socket) => {
   });
 
   // Handle joining chat room
-  socket.on('join-chat', (digitalHumanId) => {
-    socket.join(`chat_${digitalHumanId}`);
-    console.log(`Client ${socket.id} joined chat for digital human: ${digitalHumanId}`);
+  socket.on('join-chat', async (digitalHumanId) => {
+    const user = userSessions.get(socket.id);
+    if (!user) {
+      socket.emit('error', { 
+        message: 'User not authenticated', 
+        code: 'AUTH_REQUIRED' 
+      });
+      return;
+    }
     
-    // Send a test message to confirm socket communication
-    socket.emit('message-received', {
-      id: 'test_' + Date.now(),
-      role: 'assistant' as const,
-      content: 'Test message: Socket connection is working!',
-      timestamp: new Date(),
-      digitalHumanId: digitalHumanId
-    });
+    // Use user-specific chat room
+    const userChatRoom = `chat_${user.id}_${digitalHumanId}`;
+    socket.join(userChatRoom);
+    console.log(`User ${user.username} (${socket.id}) joined chat for digital human: ${digitalHumanId}`);
     
-    // Send chat history
-    const history = chatService.getChatHistory(digitalHumanId);
+    // Send user-specific chat history
+    const history = await chatService.getChatHistory(user.id, digitalHumanId);
     history.forEach(message => {
       socket.emit('message-received', message);
     });
+    
+    console.log(`Sent ${history.length} historical messages to user ${user.username}`);
   });
 
   socket.on('disconnect', () => {

@@ -262,6 +262,21 @@ export class DatabaseService {
     });
   }
 
+  async getAllDigitalHumans(): Promise<StoredDigitalHuman[]> {
+    return new Promise((resolve, reject) => {
+      this.db.all(
+        'SELECT * FROM digital_humans ORDER BY updated_at DESC',
+        (err, rows: StoredDigitalHuman[]) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(rows || []);
+          }
+        }
+      );
+    });
+  }
+
   async getDigitalHumanById(id: string): Promise<StoredDigitalHuman | null> {
     return new Promise((resolve, reject) => {
       this.db.get(
@@ -295,6 +310,36 @@ export class DatabaseService {
   }
 
   // Chat session management
+  async getOrCreateChatSession(userId: number, digitalHumanId: string): Promise<ChatSession> {
+    return new Promise((resolve, reject) => {
+      // First try to find existing session
+      this.db.get(
+        'SELECT * FROM chat_sessions WHERE user_id = ? AND digital_human_id = ?',
+        [userId, digitalHumanId],
+        async (err, row: ChatSession) => {
+          if (err) {
+            reject(err);
+          } else if (row) {
+            // Update the session timestamp
+            this.db.run(
+              'UPDATE chat_sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+              [row.id]
+            );
+            resolve(row);
+          } else {
+            // Create new session
+            try {
+              const newSession = await this.createChatSession(userId, digitalHumanId);
+              resolve(newSession);
+            } catch (error) {
+              reject(error);
+            }
+          }
+        }
+      );
+    });
+  }
+
   async createChatSession(userId: number, digitalHumanId: string): Promise<ChatSession> {
     const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
