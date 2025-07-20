@@ -13,7 +13,9 @@ import {
   Search,
   Filter,
   Lock,
-  Globe
+  Globe,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
 import { DigitalHuman } from '../types/index';
 import { socketService } from '../services/socketService';
@@ -45,6 +47,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [activeTab, setActiveTab] = useState<'my-bots' | 'public' | 'recent'>('my-bots');
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{
+    isOpen: boolean;
+    bot: DigitalHuman | null;
+  }>({ isOpen: false, bot: null });
 
   useEffect(() => {
     // Request dashboard data when component mounts
@@ -75,12 +81,40 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
     socketService.onDigitalHumanUpdated(handleDigitalHumanUpdated);
 
+    // Set up digital human deleted listener
+    const handleDigitalHumanDeleted = (deletedBotId: string) => {
+      console.log('Digital human deleted:', deletedBotId);
+      setDashboardData(prev => prev ? {
+        ...prev,
+        digitalHumans: {
+          ...prev.digitalHumans,
+          userBots: prev.digitalHumans.userBots.filter(bot => bot.id !== deletedBotId),
+          publicBots: prev.digitalHumans.publicBots.filter(bot => bot.id !== deletedBotId),
+          recentBots: prev.digitalHumans.recentBots.filter(bot => bot.id !== deletedBotId)
+        }
+      } : null);
+      setDeleteConfirmation({ isOpen: false, bot: null });
+    };
+
+    socketService.onDigitalHumanDeleted(handleDigitalHumanDeleted);
+
     return () => {
       // Note: This will need to be implemented in socket service
       // socketService.off('dashboard-data', handleDashboardData);
       // socketService.off('digital-human-updated', handleDigitalHumanUpdated);
+      // socketService.off('digital-human-deleted', handleDigitalHumanDeleted);
     };
   }, []);
+
+  // Focus trap for delete modal
+  useEffect(() => {
+    if (deleteConfirmation.isOpen) {
+      const modal = document.querySelector('[role="dialog"]') as HTMLElement;
+      if (modal) {
+        modal.focus();
+      }
+    }
+  }, [deleteConfirmation.isOpen]);
 
   const handleBotSelect = (digitalHuman: DigitalHuman) => {
     onSelectDigitalHuman(digitalHuman);
@@ -101,6 +135,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
         )
       }
     } : null);
+  };
+
+  const handleDeleteBot = (bot: DigitalHuman, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent triggering the bot selection
+    setDeleteConfirmation({ isOpen: true, bot });
+  };
+
+  const confirmDelete = () => {
+    if (deleteConfirmation.bot) {
+      socketService.deleteDigitalHuman(deleteConfirmation.bot.id);
+    }
+  };
+
+  const cancelDelete = () => {
+    setDeleteConfirmation({ isOpen: false, bot: null });
   };
 
   const filterBots = (bots: DigitalHuman[]) => {
@@ -299,19 +348,28 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 onClick={() => handleBotSelect(bot)}
                 className="bg-white p-6 rounded-lg border border-gray-200 hover:border-purple-300 hover:shadow-lg transition-all cursor-pointer group relative"
               >
-                {/* Quick Action Button - Only for My Bots */}
+                {/* Quick Action Buttons - Only for My Bots */}
                 {activeTab === 'my-bots' && (
-                  <button
-                    onClick={(e) => toggleBotVisibility(bot, e)}
-                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full bg-gray-100 hover:bg-gray-200"
-                    title={bot.isPublic ? 'Make Private' : 'Make Public'}
-                  >
-                    {bot.isPublic ? (
-                      <Lock className="h-3 w-3 text-gray-600" />
-                    ) : (
-                      <Globe className="h-3 w-3 text-gray-600" />
-                    )}
-                  </button>
+                  <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={(e) => toggleBotVisibility(bot, e)}
+                      className="p-1.5 rounded-full bg-gray-100 hover:bg-gray-200"
+                      title={bot.isPublic ? 'Make Private' : 'Make Public'}
+                    >
+                      {bot.isPublic ? (
+                        <Lock className="h-3 w-3 text-gray-600" />
+                      ) : (
+                        <Globe className="h-3 w-3 text-gray-600" />
+                      )}
+                    </button>
+                    <button
+                      onClick={(e) => handleDeleteBot(bot, e)}
+                      className="p-1.5 rounded-full bg-red-100 hover:bg-red-200"
+                      title="Delete Bot"
+                    >
+                      <Trash2 className="h-3 w-3 text-red-600" />
+                    </button>
+                  </div>
                 )}
                 
                 <div className="flex items-start justify-between mb-4">
@@ -403,6 +461,54 @@ export const Dashboard: React.FC<DashboardProps> = ({
           )}
         </main>
       </div>
+      
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmation.isOpen && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={(e) => e.target === e.currentTarget && cancelDelete()}
+        >
+          <div 
+            className="bg-white rounded-lg p-6 max-w-md w-full mx-4"
+            role="dialog"
+            aria-labelledby="delete-modal-title"
+            aria-describedby="delete-modal-desc"
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') cancelDelete();
+              if (e.key === 'Enter') confirmDelete();
+            }}
+            tabIndex={0}
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <AlertTriangle className="h-6 w-6 text-red-500" />
+              <h3 id="delete-modal-title" className="text-lg font-semibold text-gray-900">
+                Delete Digital Human
+              </h3>
+            </div>
+            
+            <p id="delete-modal-desc" className="text-gray-600 mb-6">
+              Are you sure you want to delete <strong>"{deleteConfirmation.bot?.name}"</strong>? 
+              This action cannot be undone and will permanently remove all chat history with this digital human.
+            </p>
+            
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={cancelDelete}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

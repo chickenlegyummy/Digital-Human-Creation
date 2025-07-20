@@ -104,6 +104,16 @@ function App() {
         addNotification('success', 'Digital human updated successfully!');
       });
 
+      socketService.onDigitalHumanDeleted((deletedBotId) => {
+        console.log('🗑️ Digital human deleted:', deletedBotId);
+        addNotification('success', '🗑️ Digital human deleted successfully');
+        // If the currently selected digital human was deleted, go back to dashboard
+        if (digitalHuman && digitalHuman.id === deletedBotId) {
+          setDigitalHuman(null);
+          setView('dashboard');
+        }
+      });
+
       socketService.onError((error) => {
         console.error('🚨 App received socket error:', error);
         setIsGenerating(false);
@@ -114,6 +124,8 @@ function App() {
         // Handle specific error messages
         if (error.code === 'PERMISSION_DENIED') {
           addNotification('error', '🔒 Permission Denied: You can only edit your own digital humans');
+        } else if (error.code === 'DELETE_ERROR') {
+          addNotification('error', '❌ Delete Failed: You can only delete your own digital humans');
         } else {
           addNotification('error', error.message);
         }
