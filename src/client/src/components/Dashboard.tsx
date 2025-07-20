@@ -15,7 +15,9 @@ import {
   Lock,
   Globe,
   Trash2,
-  AlertTriangle
+  AlertTriangle,
+  Copy,
+  Check
 } from 'lucide-react';
 import { DigitalHuman } from '../types/index';
 import { socketService } from '../services/socketService';
@@ -51,6 +53,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
     isOpen: boolean;
     bot: DigitalHuman | null;
   }>({ isOpen: false, bot: null });
+  const [promptViewer, setPromptViewer] = useState<{
+    isOpen: boolean;
+    bot: DigitalHuman | null;
+    copied: boolean;
+  }>({ isOpen: false, bot: null, copied: false });
 
   useEffect(() => {
     // Request dashboard data when component mounts
@@ -116,6 +123,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
     }
   }, [deleteConfirmation.isOpen]);
 
+  // Focus trap for prompt viewer modal
+  useEffect(() => {
+    if (promptViewer.isOpen) {
+      const modal = document.querySelector('[aria-labelledby="prompt-modal-title"]') as HTMLElement;
+      if (modal) {
+        modal.focus();
+      }
+    }
+  }, [promptViewer.isOpen]);
+
   const handleBotSelect = (digitalHuman: DigitalHuman) => {
     onSelectDigitalHuman(digitalHuman);
   };
@@ -150,6 +167,98 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   const cancelDelete = () => {
     setDeleteConfirmation({ isOpen: false, bot: null });
+  };
+
+  const handleViewPrompt = (bot: DigitalHuman, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent triggering the bot selection
+    setPromptViewer({ isOpen: true, bot, copied: false });
+  };
+
+  const handleCopyPrompt = async () => {
+    if (promptViewer.bot) {
+      try {
+        // Create a well-formatted prompt for external use
+        const sections = [];
+        
+        // Header
+        sections.push(`# ${promptViewer.bot.name} - Digital Human Prompt`);
+        sections.push(`Generated on: ${new Date().toLocaleDateString()}`);
+        sections.push('');
+        
+        // Basic Information
+        sections.push('## Configuration');
+        sections.push(`- Temperature: ${promptViewer.bot.temperature} (Controls creativity/randomness)`);
+        sections.push(`- Max Tokens: ${promptViewer.bot.maxTokens} (Response length limit)`);
+        sections.push(`- Visibility: ${promptViewer.bot.isPublic ? 'Public' : 'Private'}`);
+        sections.push('');
+        
+        // Personality
+        sections.push('## Personality');
+        sections.push(promptViewer.bot.personality);
+        sections.push('');
+        
+        // Main System Prompt
+        sections.push('## System Prompt');
+        sections.push('```');
+        sections.push(promptViewer.bot.prompt);
+        sections.push('```');
+        sections.push('');
+        
+        // Rules (if any)
+        if (promptViewer.bot.rules && promptViewer.bot.rules.length > 0) {
+          sections.push('## Rules and Guidelines');
+          promptViewer.bot.rules.forEach((rule, index) => {
+            sections.push(`${index + 1}. ${rule}`);
+          });
+          sections.push('');
+        }
+        
+        // Usage Instructions
+        sections.push('## How to Use This Prompt');
+        sections.push('1. Copy the System Prompt section above');
+        sections.push('2. Paste it into your AI application as the system/instructions prompt');
+        sections.push('3. Adjust the temperature and max tokens settings as needed');
+        sections.push('4. The personality section can be integrated into the system prompt if desired');
+        sections.push('');
+        sections.push('---');
+        sections.push(`Exported from Digital Human Creation Studio`);
+
+        const fullPrompt = sections.join('\n');
+
+        await navigator.clipboard.writeText(fullPrompt);
+        setPromptViewer(prev => ({ ...prev, copied: true }));
+        
+        // Reset copied state after 2 seconds
+        setTimeout(() => {
+          setPromptViewer(prev => ({ ...prev, copied: false }));
+        }, 2000);
+      } catch (error) {
+        console.error('Failed to copy prompt:', error);
+        // Fallback to simple text selection
+        alert('Copy failed. Please manually select and copy the text from the modal.');
+      }
+    }
+  };
+
+  const handleQuickCopyPrompt = async () => {
+    if (promptViewer.bot) {
+      try {
+        // Copy just the system prompt for quick use
+        await navigator.clipboard.writeText(promptViewer.bot.prompt);
+        setPromptViewer(prev => ({ ...prev, copied: true }));
+        
+        // Reset copied state after 2 seconds
+        setTimeout(() => {
+          setPromptViewer(prev => ({ ...prev, copied: false }));
+        }, 1500);
+      } catch (error) {
+        console.error('Failed to copy prompt:', error);
+      }
+    }
+  };
+
+  const closePromptViewer = () => {
+    setPromptViewer({ isOpen: false, bot: null, copied: false });
   };
 
   const filterBots = (bots: DigitalHuman[]) => {
@@ -363,6 +472,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       )}
                     </button>
                     <button
+                      onClick={(e) => handleViewPrompt(bot, e)}
+                      className="p-1.5 rounded-full bg-blue-100 hover:bg-blue-200"
+                      title="Copy Prompt"
+                    >
+                      <Copy className="h-3 w-3 text-blue-600" />
+                    </button>
+                    <button
                       onClick={(e) => handleDeleteBot(bot, e)}
                       className="p-1.5 rounded-full bg-red-100 hover:bg-red-200"
                       title="Delete Bot"
@@ -461,6 +577,152 @@ export const Dashboard: React.FC<DashboardProps> = ({
           )}
         </main>
       </div>
+      
+      {/* Prompt Viewer Modal */}
+      {promptViewer.isOpen && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={(e) => e.target === e.currentTarget && closePromptViewer()}
+        >
+          <div 
+            className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[80vh] mx-4 overflow-y-auto"
+            role="dialog"
+            aria-labelledby="prompt-modal-title"
+            aria-describedby="prompt-modal-desc"
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') closePromptViewer();
+            }}
+            tabIndex={0}
+          >
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center">
+                  <Bot className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <h3 id="prompt-modal-title" className="text-xl font-semibold text-gray-900">
+                    {promptViewer.bot?.name} - System Prompt
+                  </h3>
+                  <p className="text-sm text-gray-500">Copy this prompt to use in other applications</p>
+                </div>
+              </div>
+              <button
+                onClick={closePromptViewer}
+                className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            
+            <div id="prompt-modal-desc" className="space-y-6">
+              {/* Bot Info Section */}
+              <div className="bg-gray-50 rounded-lg p-4">
+                <h4 className="font-medium text-gray-900 mb-2">Digital Human Information</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="text-gray-600">Name:</span>
+                    <span className="ml-2 font-medium">{promptViewer.bot?.name}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Temperature:</span>
+                    <span className="ml-2 font-medium">{promptViewer.bot?.temperature}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Max Tokens:</span>
+                    <span className="ml-2 font-medium">{promptViewer.bot?.maxTokens}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Visibility:</span>
+                    <span className="ml-2 font-medium">{promptViewer.bot?.isPublic ? 'Public' : 'Private'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Personality Section */}
+              <div>
+                <h4 className="font-medium text-gray-900 mb-2">Personality</h4>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <p className="text-gray-700">{promptViewer.bot?.personality}</p>
+                </div>
+              </div>
+
+              {/* System Prompt Section */}
+              <div>
+                <h4 className="font-medium text-gray-900 mb-2">System Prompt</h4>
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 relative">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-medium text-purple-700 bg-purple-200 px-2 py-1 rounded">
+                      MAIN SYSTEM PROMPT
+                    </span>
+                    <button
+                      onClick={handleQuickCopyPrompt}
+                      className="text-xs text-purple-600 hover:text-purple-800 flex items-center gap-1 px-2 py-1 rounded hover:bg-purple-200 transition-colors"
+                      title="Copy just this system prompt"
+                    >
+                      <Copy className="h-3 w-3" />
+                      Quick Copy
+                    </button>
+                  </div>
+                  <pre className="whitespace-pre-wrap text-sm text-gray-700 font-mono">
+                    {promptViewer.bot?.prompt}
+                  </pre>
+                </div>
+              </div>
+
+              {/* Rules Section */}
+              {promptViewer.bot?.rules && promptViewer.bot.rules.length > 0 && (
+                <div>
+                  <h4 className="font-medium text-gray-900 mb-2">Rules</h4>
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                    <ol className="list-decimal list-inside space-y-1 text-sm text-gray-700">
+                      {promptViewer.bot.rules.map((rule, index) => (
+                        <li key={index}>{rule}</li>
+                      ))}
+                    </ol>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <div className="flex gap-3 justify-end mt-6 pt-6 border-t border-gray-200">
+              <button
+                onClick={closePromptViewer}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Close
+              </button>
+              <button
+                onClick={handleQuickCopyPrompt}
+                className="px-4 py-2 border border-blue-300 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors flex items-center gap-2"
+              >
+                <Copy className="h-4 w-4" />
+                Quick Copy (System Prompt Only)
+              </button>
+              <button
+                onClick={handleCopyPrompt}
+                className={`px-4 py-2 rounded-lg text-white transition-all flex items-center gap-2 ${
+                  promptViewer.copied 
+                    ? 'bg-green-600 hover:bg-green-700' 
+                    : 'bg-purple-600 hover:bg-purple-700'
+                }`}
+              >
+                {promptViewer.copied ? (
+                  <>
+                    <Check className="h-4 w-4" />
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-4 w-4" />
+                    Copy Full Documentation
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Delete Confirmation Modal */}
       {deleteConfirmation.isOpen && (
