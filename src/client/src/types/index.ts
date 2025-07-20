@@ -6,6 +6,7 @@ export interface DigitalHuman {
   personality: string;
   temperature: number;
   maxTokens: number;
+  isPublic: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

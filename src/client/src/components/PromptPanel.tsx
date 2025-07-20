@@ -353,6 +353,40 @@ export const PromptPanel: React.FC<PromptPanelProps> = ({
                       className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
                     />
                   </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Visibility
+                    </label>
+                    <div className="flex items-center space-x-4">
+                      <label className="flex items-center">
+                        <input
+                          type="radio"
+                          name="visibility"
+                          checked={!localHuman.isPublic}
+                          onChange={() => updateLocalHuman({ isPublic: false })}
+                          className="mr-2 text-purple-600 focus:ring-purple-500"
+                        />
+                        <span className="text-sm text-gray-700">Private</span>
+                      </label>
+                      <label className="flex items-center">
+                        <input
+                          type="radio"
+                          name="visibility"
+                          checked={localHuman.isPublic}
+                          onChange={() => updateLocalHuman({ isPublic: true })}
+                          className="mr-2 text-purple-600 focus:ring-purple-500"
+                        />
+                        <span className="text-sm text-gray-700">Public</span>
+                      </label>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {localHuman.isPublic ? 
+                        'This digital human will be visible to all users' : 
+                        'This digital human will only be visible to you'
+                      }
+                    </p>
+                  </div>
                 </div>
               )}
             </div>

@@ -82,6 +82,7 @@ io.on('connection', (socket) => {
               personality: dh.personality,
               temperature: dh.temperature,
               maxTokens: dh.max_tokens,
+              isPublic: dh.is_public,
               createdAt: new Date(dh.created_at),
               updatedAt: new Date(dh.updated_at)
             }));
@@ -94,6 +95,7 @@ io.on('connection', (socket) => {
               personality: dh.personality,
               temperature: dh.temperature,
               maxTokens: dh.max_tokens,
+              isPublic: dh.is_public,
               createdAt: new Date(dh.created_at),
               updatedAt: new Date(dh.updated_at)
             }));
@@ -172,6 +174,7 @@ io.on('connection', (socket) => {
         personality: dh.personality,
         temperature: dh.temperature,
         maxTokens: dh.max_tokens,
+        isPublic: dh.is_public,
         createdAt: new Date(dh.created_at),
         updatedAt: new Date(dh.updated_at)
       }));
@@ -184,6 +187,7 @@ io.on('connection', (socket) => {
         personality: dh.personality,
         temperature: dh.temperature,
         maxTokens: dh.max_tokens,
+        isPublic: dh.is_public,
         createdAt: new Date(dh.created_at),
         updatedAt: new Date(dh.updated_at)
       }));
@@ -332,6 +336,7 @@ io.on('connection', (socket) => {
         personality: dh.personality,
         temperature: dh.temperature,
         maxTokens: dh.max_tokens,
+        isPublic: dh.is_public,
         createdAt: new Date(dh.created_at),
         updatedAt: new Date(dh.updated_at)
       }));

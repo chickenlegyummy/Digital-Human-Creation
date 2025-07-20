@@ -206,7 +206,7 @@ export class DatabaseService {
         digitalHuman.personality,
         digitalHuman.temperature,
         digitalHuman.maxTokens,
-        false,
+        digitalHuman.isPublic || false,
         function(err) {
           if (err) {
             reject(err);
@@ -221,7 +221,7 @@ export class DatabaseService {
               personality: digitalHuman.personality,
               temperature: digitalHuman.temperature,
               max_tokens: digitalHuman.maxTokens,
-              is_public: false,
+              is_public: digitalHuman.isPublic || false,
               created_at: digitalHuman.createdAt || new Date().toISOString(),
               updated_at: new Date().toISOString()
             });

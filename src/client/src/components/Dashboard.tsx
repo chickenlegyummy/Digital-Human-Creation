@@ -11,7 +11,9 @@ import {
   Settings,
   LogOut,
   Search,
-  Filter
+  Filter,
+  Lock,
+  Globe
 } from 'lucide-react';
 import { DigitalHuman } from '../types/index';
 import { socketService } from '../services/socketService';
@@ -57,14 +59,48 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
     socketService.onDashboardData(handleDashboardData);
 
+    // Set up digital human updated listener
+    const handleDigitalHumanUpdated = (updatedBot: DigitalHuman) => {
+      console.log('Digital human updated:', updatedBot);
+      setDashboardData(prev => prev ? {
+        ...prev,
+        digitalHumans: {
+          ...prev.digitalHumans,
+          userBots: prev.digitalHumans.userBots.map(bot => 
+            bot.id === updatedBot.id ? updatedBot : bot
+          )
+        }
+      } : null);
+    };
+
+    socketService.onDigitalHumanUpdated(handleDigitalHumanUpdated);
+
     return () => {
       // Note: This will need to be implemented in socket service
       // socketService.off('dashboard-data', handleDashboardData);
+      // socketService.off('digital-human-updated', handleDigitalHumanUpdated);
     };
   }, []);
 
   const handleBotSelect = (digitalHuman: DigitalHuman) => {
     onSelectDigitalHuman(digitalHuman);
+  };
+
+  const toggleBotVisibility = (bot: DigitalHuman, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent triggering the bot selection
+    const updatedBot = { ...bot, isPublic: !bot.isPublic };
+    socketService.updateDigitalHuman(updatedBot);
+    
+    // Update local state optimistically
+    setDashboardData(prev => prev ? {
+      ...prev,
+      digitalHumans: {
+        ...prev.digitalHumans,
+        userBots: prev.digitalHumans.userBots.map(b => 
+          b.id === bot.id ? updatedBot : b
+        )
+      }
+    } : null);
   };
 
   const filterBots = (bots: DigitalHuman[]) => {
@@ -261,15 +297,39 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <div
                 key={bot.id}
                 onClick={() => handleBotSelect(bot)}
-                className="bg-white p-6 rounded-lg border border-gray-200 hover:border-purple-300 hover:shadow-lg transition-all cursor-pointer"
+                className="bg-white p-6 rounded-lg border border-gray-200 hover:border-purple-300 hover:shadow-lg transition-all cursor-pointer group relative"
               >
+                {/* Quick Action Button - Only for My Bots */}
+                {activeTab === 'my-bots' && (
+                  <button
+                    onClick={(e) => toggleBotVisibility(bot, e)}
+                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full bg-gray-100 hover:bg-gray-200"
+                    title={bot.isPublic ? 'Make Private' : 'Make Public'}
+                  >
+                    {bot.isPublic ? (
+                      <Lock className="h-3 w-3 text-gray-600" />
+                    ) : (
+                      <Globe className="h-3 w-3 text-gray-600" />
+                    )}
+                  </button>
+                )}
+                
                 <div className="flex items-start justify-between mb-4">
                   <div className="w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center">
                     <Bot className="h-6 w-6 text-white" />
                   </div>
-                  <div className="flex items-center gap-1">
-                    <Star className="h-4 w-4 text-yellow-400" />
-                    <span className="text-sm text-gray-500">4.5</span>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1" title={bot.isPublic ? 'Public Bot' : 'Private Bot'}>
+                      {bot.isPublic ? (
+                        <Globe className="h-4 w-4 text-green-500" />
+                      ) : (
+                        <Lock className="h-4 w-4 text-gray-400" />
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Star className="h-4 w-4 text-yellow-400" />
+                      <span className="text-sm text-gray-500">4.5</span>
+                    </div>
                   </div>
                 </div>
                 

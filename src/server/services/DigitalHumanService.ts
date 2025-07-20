@@ -126,6 +126,7 @@ Please ensure the digital human is well-defined, engaging, and suitable for inte
         personality: parsedResponse.personality || 'Friendly and knowledgeable',
         temperature: 0.7,
         maxTokens: 1000,
+        isPublic: false,
         createdAt: new Date(),
         updatedAt: new Date()
       };
