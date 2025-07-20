@@ -114,7 +114,7 @@ The system implements a three-tier architecture based on the original design dia
 
 ## 📦 Installation & Setup
 
-### Option 1: Quick Setup with Init Script
+### Option 1: Quick Setup with Init Script (Recommended)
 
 ```bash
 # Clone the repository
@@ -125,13 +125,19 @@ cd Digital-Human-Creation
 bash init.sh
 ```
 
-The init script will:
-1. Install all dependencies automatically
-2. Create and configure the `.env` file
-3. Set up the database structure
-4. Provide setup completion confirmation
+The `init.sh` script handles the complete setup process automatically:
+1. **Install Dependencies** - Runs `npm install` for all required packages
+2. **Create Environment File** - Generates `.env` file with template configuration
+3. **Configure Variables** - Sets up JWT secrets, API keys, server ports, and database paths
+4. **Ready to Run** - System prepared for immediate use with `npm run dev`
 
-### Option 2: Manual Setup
+After running the script, simply:
+- Add your DeepSeek API keys to the `.env` file
+- Run `npm run dev` to start the application
+
+### Option 2: Manual Setup (Alternative)
+
+If you prefer to set up manually or need custom configuration:
 
 ```bash
 # 1. Clone and navigate
@@ -145,7 +151,7 @@ npm install
 cp .env.example .env
 ```
 
-Edit `.env` with your configuration:
+Manually edit `.env` with your configuration:
 ```env
 # DeepSeek API Keys (Get from: https://platform.deepseek.com/)
 DeepSeek_R1=your-deepseek-api-key-1
